@@ -6,7 +6,7 @@ const MessageList = ({ messages, isLoading, messagesEndRef, formatTime }) => {
       <div className="max-w-4xl mx-auto space-y-6">
         {messages.map((message, index) => (
           <div
-            key={message.id}
+            key={message.id||index}
             className={`flex ${
               message.sender === "user" ? "justify-end" : "justify-start"
             } animate-fadeIn`}
@@ -33,7 +33,7 @@ const MessageList = ({ messages, isLoading, messagesEndRef, formatTime }) => {
                 }`}
               >
                 <span className="text-xs opacity-70 font-medium">
-                  {formatTime(message.timestamp)}
+                  {formatTime(message.createdAt)}
                 </span>
 
                 {/* Read status for user messages */}

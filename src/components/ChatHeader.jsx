@@ -1,6 +1,11 @@
 import React from "react";
+import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 
 const ChatHeader = ({ sidebarOpen, setSidebarOpen }) => {
+  const { user } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
+
   return (
     <div className="bg-zinc-900 border-b border-zinc-700 px-4 py-3 flex items-center">
       <button
@@ -30,7 +35,7 @@ const ChatHeader = ({ sidebarOpen, setSidebarOpen }) => {
         <h1 className="text-lg font-medium">Lexa AI</h1>
       </div>
 
-      <div className="w-9"></div>
+     
     </div>
   );
 };

@@ -1,28 +1,94 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { io } from "socket.io-client";
+import {
+  fetchChats,
+  createNewChat,
+  sendMessage,
+  setActiveChat,
+  setMessages,
+  addUserMessage,
+  addAiMessage,
+  setSendingStarted,
+  setSendingFinished,
+} from "../store/chatSlice";
+import { fetchUserProfile } from "../store/authSlice";
 import Sidebar from "../components/Sidebar";
 import ChatHeader from "../components/ChatHeader";
 import MessageList from "../components/MessageList";
 import MessageInput from "../components/MessageInput";
 
 const Home = () => {
-  const [messages, setMessages] = useState([]);
+  // Redux state
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { chats, activeChatId, messages, isLoading, isSending } = useSelector(
+    (state) => state.chat
+  );
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
+
+  // Local state for UI only
   const [userInput, setUserInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.innerWidth >= 1024; // lg breakpoint
-    }
-    return false;
-  });
-  const [previousChats, setPreviousChats] = useState([]);
-  const [currentChatId, setCurrentChatId] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showChatNameInput, setShowChatNameInput] = useState(false);
   const [chatNameInput, setChatNameInput] = useState("");
+  const [socket, setSocket] = useState(null);
+
+  // Refs
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const chatAreaRef = useRef(null);
   const chatNameInputRef = useRef(null);
+
+  // Load chats and user profile on component mount
+  useEffect(() => {
+    // Only fetch chats if user is authenticated
+    if (isAuthenticated) {
+      dispatch(fetchChats());
+    }
+    dispatch(fetchUserProfile());
+  }, [dispatch, isAuthenticated]);
+
+  // Initialize Socket.IO connection
+  useEffect(() => {
+    if (!activeChatId) return;
+
+    const newSocket = io("http://localhost:5000", {
+      withCredentials: true,
+      transports: ["polling", "websocket"],
+      forceNew: true,
+      reconnection: true,
+      timeout: 20000,
+    });
+
+    setSocket(newSocket);
+
+    newSocket.on("connect", () => {
+      console.log("Connected to server:", newSocket.id);
+    });
+
+    newSocket.on("connect_error", (error) => {
+      console.error("Connection error:", error);
+    });
+
+    // Listen for AI responses
+    newSocket.on("ai-response", (data) => {
+      console.log("Received AI response:", data);
+      if (data.chat === activeChatId) {
+        dispatch(addAiMessage({ message: data.content }));
+        dispatch(setSendingFinished());
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      newSocket.close();
+      setSocket(null);
+    };
+  }, [dispatch, activeChatId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -39,33 +105,24 @@ const Home = () => {
     }
   }, [showChatNameInput]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!userInput.trim() || isLoading) return;
+  const handleSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+      const trimmedInput = userInput.trim();
+      if (!trimmedInput || !activeChatId || isSending || !socket) return;
 
-    const newMessage = {
-      id: Date.now(),
-      text: userInput,
-      sender: "user",
-      timestamp: new Date().toISOString(),
-    };
+      dispatch(setSendingStarted());
+      dispatch(addUserMessage({ chatId: activeChatId, message: trimmedInput }));
+      setUserInput("");
 
-    setMessages((prev) => [...prev, newMessage]);
-    setUserInput("");
-    setIsLoading(true);
-
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse = {
-        id: Date.now() + 1,
-        text: "I understand your message. This is a simulated AI response. In a real implementation, this would connect to an AI service like OpenAI's GPT API to provide intelligent responses based on your input.",
-        sender: "ai",
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-      setIsLoading(false);
-    }, 1500);
-  };
+      // Emit message to socket
+      socket.emit("ai-message", {
+        chat: activeChatId,
+        message: trimmedInput,
+      });
+    },
+    [userInput, activeChatId, isSending, socket, dispatch]
+  );
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -77,39 +134,28 @@ const Home = () => {
   const startNewChat = () => {
     setShowChatNameInput(true);
     setChatNameInput("");
+
+    // Close sidebar on mobile when starting new chat
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
   };
 
-  const handleChatNameSubmit = (e) => {
+  const handleChatNameSubmit = async (e) => {
     e.preventDefault();
     if (!chatNameInput.trim()) return;
 
-    const newChat = {
-      id: Date.now(),
-      title: chatNameInput.trim(),
-      lastMessage: "Started new conversation",
-      timestamp: new Date().toISOString(),
-      createdAt: Date.now(), // Add creation timestamp for sorting
-    };
+    try {
+      await dispatch(createNewChat(chatNameInput.trim()));
+      setShowChatNameInput(false);
+      setChatNameInput("");
 
-    // Add new chat at the beginning (top) of the array
-    setPreviousChats((prev) => [newChat, ...prev]);
-    setCurrentChatId(newChat.id);
-    setMessages([
-      {
-        id: 1,
-        text: "Hello! I'm your AI assistant. How can I help you today?",
-        sender: "ai",
-        timestamp: new Date().toISOString(),
-      },
-    ]);
-
-    // Reset chat name input state
-    setShowChatNameInput(false);
-    setChatNameInput("");
-
-    // Don't close sidebar on desktop when starting new chat
-    if (window.innerWidth < 1024) {
-      setSidebarOpen(false);
+      // Close sidebar on mobile after creating new chat
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false);
+      }
+    } catch (error) {
+      console.error("Failed to create chat:", error);
     }
   };
 
@@ -128,20 +174,43 @@ const Home = () => {
     setChatNameInput("");
   };
 
-  const selectChat = (chatId) => {
-    setCurrentChatId(chatId);
-    // Don't close sidebar on desktop when selecting chat
+  const selectChat = async (chatId) => {
+    dispatch(setActiveChat(chatId));
+    dispatch(setMessages([])); // Clear existing messages first
+    try {
+      const response = await axios.get(
+        `http://localhost:5000/api/chat/messages/${chatId}`, // Fixed: was /messages/:chatId, should be /messages/${chatId}
+        {
+          withCredentials: true,
+        }
+      );
+      const messages = await getMessages(chatId);
+      // Transform messages to match frontend format
+      const formattedMessages = messages.map((msg) => ({
+        id: msg._id,
+        text: msg.content,
+        sender: msg.role === "user" ? "user" : "ai",
+        createdAt: msg.createdAt,
+      }));
+      dispatch(setMessages(formattedMessages));
+    } catch (error) {
+      console.error("Error loading chat messages:", error);
+    }
+    // Close sidebar on mobile when selecting chat
     if (window.innerWidth < 1024) {
       setSidebarOpen(false);
     }
-    setMessages([
+  };
+
+  const getMessages = async (chatId) => {
+    console.log("Raw messages from backend:", messages);
+    const response = await axios.get(
+      `http://localhost:5000/api/chat/messages/${chatId}`,
       {
-        id: 1,
-        text: "Hello! I'm your AI assistant. How can I help you today?",
-        sender: "ai",
-        timestamp: new Date().toISOString(),
-      },
-    ]);
+        withCredentials: true,
+      }
+    );
+    return response.data.messages;
   };
 
   const formatTime = (timestamp) => {
@@ -154,11 +223,11 @@ const Home = () => {
   // Handle window resize to manage sidebar state
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setSidebarOpen(true);
-      } else {
+      // Only close sidebar on mobile, don't auto-open on desktop
+      if (window.innerWidth < 1024) {
         setSidebarOpen(false);
       }
+      // Removed the auto-opening logic for desktop
     };
 
     window.addEventListener("resize", handleResize);
@@ -232,27 +301,33 @@ const Home = () => {
         </div>
       )}
 
-      {/* Sidebar Container - Hidden when chat name input is shown */}
-      {!showChatNameInput && (
+      {/* Mobile Backdrop */}
+      {sidebarOpen && (
         <div
-          className={`transition-all duration-300 ease-in-out overflow-hidden ${
-            sidebarOpen ? "w-64" : "w-0"
-          }`}
-        >
-          <Sidebar
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
-            previousChats={previousChats}
-            currentChatId={currentChatId}
-            startNewChat={startNewChat}
-            selectChat={selectChat}
-          />
-        </div>
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden transition-opacity duration-300"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
+      {/* Sidebar Container */}
+      <div
+        className={`fixed lg:relative top-0 left-0 h-full z-50 lg:z-auto transition-all duration-300 ease-in-out overflow-hidden ${
+          sidebarOpen ? "w-64" : "w-0"
+        }`}
+      >
+        <Sidebar
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          previousChats={chats}
+          currentChatId={activeChatId}
+          startNewChat={startNewChat}
+          selectChat={selectChat}
+        />
+      </div>
+
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${showChatNameInput ? 'w-full' : ''}`}>
-        <ChatHeader sidebarOpen={sidebarOpen && !showChatNameInput} setSidebarOpen={setSidebarOpen} />
+      <div className="flex-1 flex flex-col transition-all duration-300 ease-in-out">
+        <ChatHeader sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
 
         {messages.length === 0 ? (
           <div className="flex-1 flex items-center bg-zinc-950 justify-center">
@@ -277,61 +352,87 @@ const Home = () => {
                   Welcome to Lexa AI
                 </h2>
                 <p className="text-zinc-400 text-sm">
-                  Start a conversation by creating a new chat or asking a
-                  question.
+                  {isAuthenticated
+                    ? "Start a conversation by creating a new chat or asking a question."
+                    : "Sign in to start chatting with Lexa AI."}
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <div className="bg-zinc-900 p-4 rounded-lg border border-zinc-700">
-                  <div className="text-zinc-300 font-medium mb-1">
-                    Creative Writing
+              {isAuthenticated ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="bg-zinc-900 p-4 rounded-lg border border-zinc-700">
+                    <div className="text-zinc-300 font-medium mb-1">
+                      Creative Writing
+                    </div>
+                    <div className="text-zinc-500">Help me write a story</div>
                   </div>
-                  <div className="text-zinc-500">Help me write a story</div>
-                </div>
-                <div className="bg-zinc-900 p-4 rounded-lg border border-zinc-700">
-                  <div className="text-zinc-300 font-medium mb-1">
-                    Code Assistant
+                  <div className="bg-zinc-900 p-4 rounded-lg border border-zinc-700">
+                    <div className="text-zinc-300 font-medium mb-1">
+                      Code Assistant
+                    </div>
+                    <div className="text-zinc-500">Debug my JavaScript</div>
                   </div>
-                  <div className="text-zinc-500">Debug my JavaScript</div>
+                  <div className="bg-zinc-900 p-4 rounded-lg border border-zinc-700">
+                    <div className="text-zinc-300 font-medium mb-1">
+                      Learning
+                    </div>
+                    <div className="text-zinc-500">Explain a concept</div>
+                  </div>
+                  <div className="bg-zinc-900 p-4 rounded-lg border border-zinc-700">
+                    <div className="text-zinc-300 font-medium mb-1">
+                      Planning
+                    </div>
+                    <div className="text-zinc-500">Help me organize tasks</div>
+                  </div>
                 </div>
-                <div className="bg-zinc-900 p-4 rounded-lg border border-zinc-700">
-                  <div className="text-zinc-300 font-medium mb-1">Learning</div>
-                  <div className="text-zinc-500">Explain a concept</div>
+              ) : (
+                <div className="bg-zinc-900 p-6 rounded-lg border border-zinc-700">
+                  <h3 className="text-lg font-medium text-white mb-3">
+                    Get Started with Lexa AI
+                  </h3>
+                  <p className="text-zinc-400 text-sm mb-4">
+                    Create an account or sign in to start having intelligent
+                    conversations with our AI assistant.
+                  </p>
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={() => navigate("/login")}
+                      className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    >
+                      Sign In
+                    </button>
+                    <button
+                      onClick={() => navigate("/register")}
+                      className="px-4 py-2 text-sm border border-zinc-600 hover:bg-zinc-800 text-white rounded-lg transition-colors"
+                    >
+                      Sign Up
+                    </button>
+                  </div>
                 </div>
-                <div className="bg-zinc-900 p-4 rounded-lg border border-zinc-700">
-                  <div className="text-zinc-300 font-medium mb-1">Planning</div>
-                  <div className="text-zinc-500">Help me organize tasks</div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         ) : (
           <MessageList
             messages={messages}
-            isLoading={isLoading}
+            isLoading={isSending}
             messagesEndRef={messagesEndRef}
             formatTime={formatTime}
           />
         )}
 
-        <MessageInput
-          userInput={userInput}
-          setUserInput={setUserInput}
-          handleSubmit={handleSubmit}
-          handleKeyPress={handleKeyPress}
-          isLoading={isLoading}
-          textareaRef={textareaRef}
-        />
+        {/* Only show MessageInput when a chat is active AND user is authenticated */}
+        {activeChatId && isAuthenticated && (
+          <MessageInput
+            userInput={userInput}
+            setUserInput={setUserInput}
+            handleSubmit={handleSubmit}
+            handleKeyPress={handleKeyPress}
+            isLoading={isSending}
+            textareaRef={textareaRef}
+          />
+        )}
       </div>
-
-      {/* Mobile Backdrop - Only show when sidebar is open and chat name input is not shown */}
-      {sidebarOpen && !showChatNameInput && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden transition-opacity duration-300"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
     </div>
   );
 };
