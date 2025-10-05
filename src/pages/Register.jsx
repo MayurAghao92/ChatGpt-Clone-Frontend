@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { setUser } from "../store/authSlice";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -9,8 +11,9 @@ const Register = () => {
     lastname: "",
     password: "",
   });
-  const[submitting, setSubmitting]= useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -24,25 +27,32 @@ const Register = () => {
     e.preventDefault();
     setSubmitting(true);
 
-    axios.post(
-      "http://localhost:5000/api/auth/register",
-      {
-        email: formData.email,
-        fullname:{
-          firstname: formData.firstname,
-          lastname: formData.lastname,
+    axios
+      .post(
+        "http://localhost:5000/api/auth/register",
+        {
+          email: formData.email,
+          fullname: {
+            firstname: formData.firstname,
+            lastname: formData.lastname,
+          },
+          password: formData.password,
         },
-        password: formData.password,
-       },
-       {
-        withCredentials: true,
-       }
-      ).then((response) => {
+        {
+          withCredentials: true,
+        }
+      )
+      .then((response) => {
         console.log("Registration successful:", response.data);
-        navigate("/login");
+        // Set user data in Redux
+        dispatch(setUser(response.data.user));
+        navigate("/");
       })
       .catch((error) => {
         console.error("Registration error:", error);
+      })
+      .finally(() => {
+        setSubmitting(false);
       });
     console.log("Register form submitted:", formData);
   };

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { deleteChat } from "../store/chatSlice";
+import { deleteChat, clearActiveChat } from "../store/chatSlice";
 import { logoutUser, clearUser } from "../store/authSlice";
 
 const Sidebar = ({
@@ -14,7 +14,7 @@ const Sidebar = ({
 }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { user } = useSelector((state) => state.auth);
+  const { user, isAuthenticated } = useSelector((state) => state.auth);
   const [hoveredChatId, setHoveredChatId] = useState(null);
   const [deletingChatId, setDeletingChatId] = useState(null);
 
@@ -28,6 +28,23 @@ const Sidebar = ({
     document.addEventListener("keydown", handleEsc);
     return () => document.removeEventListener("keydown", handleEsc);
   }, [setSidebarOpen]);
+
+  // Add click outside handler to clear hovered chat on mobile
+  useEffect(() => {
+    const handleTouchOutside = (event) => {
+      const chatElements = document.querySelectorAll("[data-chat-item]");
+      const isInsideChatItem = Array.from(chatElements).some((el) =>
+        el.contains(event.target)
+      );
+
+      if (!isInsideChatItem) {
+        setHoveredChatId(null);
+      }
+    };
+
+    document.addEventListener("touchstart", handleTouchOutside);
+    return () => document.removeEventListener("touchstart", handleTouchOutside);
+  }, []);
 
   const handleDeleteChat = async (chatId, e) => {
     e.stopPropagation();
@@ -52,10 +69,14 @@ const Sidebar = ({
     try {
       await dispatch(logoutUser()).unwrap();
       dispatch(clearUser());
-      // Don't navigate away, just clear the user state
+      dispatch(clearActiveChat());
     } catch (error) {
       console.error("Failed to logout:", error);
     }
+  };
+
+  const handleLogin = () => {
+    navigate("/login");
   };
 
   const getInitials = (fullname) => {
@@ -77,6 +98,31 @@ const Sidebar = ({
     >
       {/* Top Section */}
       <div className="p-3 border-b border-zinc-700">
+        {/* Header with close button */}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-white">Lexa AI</h2>
+          <button
+            data-sidebar-toggle
+            onClick={() => setSidebarOpen(false)}
+            className="p-1.5 rounded-lg hover:bg-zinc-800 transition-all duration-200 transform hover:scale-105"
+            title="Close sidebar"
+          >
+            <svg
+              className="w-5 h-5 text-zinc-400 hover:text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
         <button
           onClick={startNewChat}
           className="w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg border border-zinc-600 hover:bg-zinc-800 transition-all duration-200"
@@ -114,8 +160,10 @@ const Sidebar = ({
                 <div
                   key={chat.id}
                   className="relative group"
+                  data-chat-item
                   onMouseEnter={() => setHoveredChatId(chat.id)}
                   onMouseLeave={() => setHoveredChatId(null)}
+                  onTouchStart={() => setHoveredChatId(chat.id)}
                 >
                   <div
                     className={`flex items-center w-full text-left px-3 py-2 text-sm rounded-lg transition-all duration-200 hover:bg-zinc-800 transform hover:scale-[1.02] ${
@@ -130,11 +178,13 @@ const Sidebar = ({
                       {chat.title}
                     </button>
 
-                    {hoveredChatId === chat.id && (
+                    {/* Show delete button on hover (desktop) or when touched (mobile) or for active chat */}
+                    {(hoveredChatId === chat.id ||
+                      currentChatId === chat.id) && (
                       <button
                         onClick={(e) => handleDeleteChat(chat.id, e)}
                         disabled={deletingChatId === chat.id}
-                        className="flex-shrink-0 p-1 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors duration-200 ml-2"
+                        className="flex-shrink-0 p-1 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors duration-200 ml-2 md:opacity-100 opacity-80"
                         title="Delete chat"
                       >
                         {deletingChatId === chat.id ? (
@@ -178,36 +228,71 @@ const Sidebar = ({
 
       {/* Bottom User Section */}
       <div className="p-3 border-t border-zinc-700">
-        <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-all duration-200">
-          <div className="w-6 h-6 sm:w-7 sm:h-7 bg-gradient-to-br from-orange-400 to-orange-600 rounded-sm flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-            {getInitials(user?.fullname)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">
-              {getDisplayName(user?.fullname)}
+        {isAuthenticated ? (
+          // Show user info and logout button when authenticated
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 transition-all duration-200">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 bg-gradient-to-br from-orange-400 to-orange-600 rounded-sm flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+              {getInitials(user?.fullname)}
             </div>
-            <div className="text-xs text-zinc-400">Free</div>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-1 text-xs bg-red-400 hover:bg-red-700 px-2 py-1 rounded transition-all duration-200 transform hover:scale-105"
-          >
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium truncate">
+                {getDisplayName(user?.fullname)}
+              </div>
+              <div className="text-xs text-zinc-400">Free</div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1 text-xs bg-red-400 hover:bg-red-700 px-2 py-1 rounded transition-all duration-200 transform hover:scale-105"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
-            <span className="hidden sm:inline">Logout</span>
-          </button>
-        </div>
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
+        ) : (
+          // Show login button when not authenticated
+          <div className="flex items-center gap-3 px-3 py-2">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 bg-gradient-to-br from-gray-400 to-gray-600 rounded-sm flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+              ?
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-zinc-400">
+                Not signed in
+              </div>
+              <div className="text-xs text-zinc-500">Sign in to continue</div>
+            </div>
+            <button
+              onClick={handleLogin}
+              className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded transition-all duration-200 transform hover:scale-105"
+            >
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 16l-4-4m0 0l-4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
+                />
+              </svg>
+              <span className="hidden sm:inline">Login</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

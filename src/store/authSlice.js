@@ -1,21 +1,20 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import axios from "axios";
+import { authAxios } from "../utils/axiosConfig";
 
 const API_BASE_URL = "http://localhost:5000/api";
 
-// Thunks
-export const fetchUserProfile = createAsyncThunk(
-  "auth/fetchUserProfile",
+// Check session validity on app load
+export const validateSession = createAsyncThunk(
+  "auth/validateSession",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/auth/profile`, {
+      const response = await authAxios.get(`${API_BASE_URL}/auth/validate`, {
         withCredentials: true,
       });
       return response.data.user;
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Failed to fetch user profile"
-      );
+      // Completely suppress all logging for validation failures
+      return rejectWithValue("No active session");
     }
   }
 );
@@ -44,7 +43,7 @@ const authSlice = createSlice({
   name: "auth",
   initialState: {
     user: null,
-    isLoading: false,
+    isLoading: false, // Change to false to skip initial validation
     isAuthenticated: false,
     error: null,
   },
@@ -55,24 +54,29 @@ const authSlice = createSlice({
       state.error = null;
       state.isLoading = false;
     },
+    setUser: (state, action) => {
+      state.user = action.payload;
+      state.isAuthenticated = true;
+      state.isLoading = false;
+      state.error = null;
+    },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchUserProfile.pending, (state) => {
+      .addCase(validateSession.pending, (state) => {
         state.isLoading = true;
-        state.error = null;
       })
-      .addCase(fetchUserProfile.fulfilled, (state, action) => {
-        state.isLoading = false;
+      .addCase(validateSession.fulfilled, (state, action) => {
         state.user = action.payload;
         state.isAuthenticated = true;
+        state.isLoading = false;
         state.error = null;
       })
-      .addCase(fetchUserProfile.rejected, (state, action) => {
-        state.isLoading = false;
+      .addCase(validateSession.rejected, (state) => {
         state.user = null;
         state.isAuthenticated = false;
-        state.error = action.payload;
+        state.isLoading = false;
+        state.error = null;
       })
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
@@ -83,5 +87,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { clearUser } = authSlice.actions;
+export const { clearUser, setUser } = authSlice.actions;
 export default authSlice.reducer;

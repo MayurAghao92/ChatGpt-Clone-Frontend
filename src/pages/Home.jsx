@@ -13,8 +13,10 @@ import {
   addAiMessage,
   setSendingStarted,
   setSendingFinished,
+  initializeActiveChatFromStorage,
+  clearActiveChat,
 } from "../store/chatSlice";
-import { fetchUserProfile } from "../store/authSlice";
+import { validateSession } from "../store/authSlice";
 import Sidebar from "../components/Sidebar";
 import ChatHeader from "../components/ChatHeader";
 import MessageList from "../components/MessageList";
@@ -35,6 +37,7 @@ const Home = () => {
   const [showChatNameInput, setShowChatNameInput] = useState(false);
   const [chatNameInput, setChatNameInput] = useState("");
   const [socket, setSocket] = useState(null);
+  const [wasAuthenticated, setWasAuthenticated] = useState(isAuthenticated);
 
   // Refs
 
@@ -43,14 +46,84 @@ const Home = () => {
   const chatAreaRef = useRef(null);
   const chatNameInputRef = useRef(null);
 
-  // Load chats and user profile on component mount
   useEffect(() => {
-    // Only fetch chats if user is authenticated
-    if (isAuthenticated) {
+    const initializeApp = async () => {
+      // Skip session validation on initial load to avoid 401 errors
+      // Only validate if we suspect there might be an active session
+      const hasStoredChat = localStorage.getItem("activeChatId");
+
+      if (hasStoredChat) {
+        try {
+          await dispatch(validateSession());
+        } catch (error) {
+          // Silently handle validation failure
+        }
+      }
+
+      // Initialize active chat from storage
+      dispatch(initializeActiveChatFromStorage());
+
+      // If user is authenticated after validation, fetch chats
+      if (isAuthenticated) {
+        try {
+          await dispatch(fetchChats()).unwrap();
+        } catch (error) {
+          console.error("Failed to fetch chats:", error);
+        }
+      }
+    };
+
+    initializeApp();
+  }, [dispatch]);
+
+  // Separate effect to fetch chats when authentication state changes
+  useEffect(() => {
+    if (isAuthenticated && chats.length === 0) {
       dispatch(fetchChats());
     }
-    dispatch(fetchUserProfile());
-  }, [dispatch, isAuthenticated]);
+  }, [isAuthenticated, chats.length, dispatch]);
+
+  // Restore chat messages when activeChatId is set and chats are loaded
+  useEffect(() => {
+    if (
+      activeChatId &&
+      chats.length > 0 &&
+      isAuthenticated &&
+      messages.length === 0
+    ) {
+      const chatExists = chats.find((chat) => chat.id === activeChatId);
+      if (chatExists) {
+        loadChatMessages(activeChatId);
+      } else {
+        // localStorage.removeItem("activeChatId");
+        dispatch(clearActiveChat());
+      }
+    }
+  }, [activeChatId, chats, isAuthenticated, messages.length, dispatch]);
+
+  const loadChatMessages = useCallback(
+    async (chatId) => {
+      try {
+        const response = await axios.get(
+          `http://localhost:5000/api/chat/messages/${chatId}`,
+          {
+            withCredentials: true,
+          }
+        );
+        const messages = response.data.messages;
+        const formattedMessages = messages.map((msg) => ({
+          id: msg._id,
+          text: msg.content,
+          sender: msg.role === "user" ? "user" : "ai",
+          createdAt: msg.createdAt,
+        }));
+        dispatch(setMessages(formattedMessages));
+      } catch (error) {
+        console.error("Error loading chat messages:", error);
+      }
+    },
+    [dispatch]
+  );
 
   // Initialize Socket.IO connection
   useEffect(() => {
@@ -135,10 +208,7 @@ const Home = () => {
     setShowChatNameInput(true);
     setChatNameInput("");
 
-    // Close sidebar on mobile when starting new chat
-    if (window.innerWidth < 1024) {
-      setSidebarOpen(false);
-    }
+    // Removed automatic sidebar closing - let user close it manually
   };
 
   const handleChatNameSubmit = async (e) => {
@@ -150,10 +220,7 @@ const Home = () => {
       setShowChatNameInput(false);
       setChatNameInput("");
 
-      // Close sidebar on mobile after creating new chat
-      if (window.innerWidth < 1024) {
-        setSidebarOpen(false);
-      }
+      // Removed automatic sidebar closing - let user close it manually
     } catch (error) {
       console.error("Failed to create chat:", error);
     }
@@ -174,44 +241,34 @@ const Home = () => {
     setChatNameInput("");
   };
 
-  const selectChat = async (chatId) => {
-    dispatch(setActiveChat(chatId));
-    dispatch(setMessages([])); // Clear existing messages first
-    try {
-      const response = await axios.get(
-        `http://localhost:5000/api/chat/messages/${chatId}`, // Fixed: was /messages/:chatId, should be /messages/${chatId}
-        {
-          withCredentials: true,
-        }
-      );
-      const messages = await getMessages(chatId);
-      // Transform messages to match frontend format
-      const formattedMessages = messages.map((msg) => ({
-        id: msg._id,
-        text: msg.content,
-        sender: msg.role === "user" ? "user" : "ai",
-        createdAt: msg.createdAt,
-      }));
-      dispatch(setMessages(formattedMessages));
-    } catch (error) {
-      console.error("Error loading chat messages:", error);
-    }
-    // Close sidebar on mobile when selecting chat
-    if (window.innerWidth < 1024) {
-      setSidebarOpen(false);
-    }
-  };
-
-  const getMessages = async (chatId) => {
-    console.log("Raw messages from backend:", messages);
-    const response = await axios.get(
-      `http://localhost:5000/api/chat/messages/${chatId}`,
-      {
-        withCredentials: true,
+  const selectChat = useCallback(
+    async (chatId) => {
+      dispatch(setActiveChat(chatId));
+      dispatch(setMessages([])); // Clear existing messages first
+      try {
+        const response = await axios.get(
+          `http://localhost:5000/api/chat/messages/${chatId}`,
+          {
+            withCredentials: true,
+          }
+        );
+        // Use response.data.messages directly instead of calling getMessages again
+        const messages = response.data.messages;
+        // Transform messages to match frontend format
+        const formattedMessages = messages.map((msg) => ({
+          id: msg._id,
+          text: msg.content,
+          sender: msg.role === "user" ? "user" : "ai",
+          createdAt: msg.createdAt,
+        }));
+        dispatch(setMessages(formattedMessages));
+      } catch (error) {
+        console.error("Error loading chat messages:", error);
       }
-    );
-    return response.data.messages;
-  };
+      // Removed automatic sidebar closing - let user close it manually
+    },
+    [dispatch]
+  );
 
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleTimeString([], {
@@ -259,6 +316,15 @@ const Home = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [sidebarOpen]);
+
+  // Handle authentication state changes - reload if user logs out while in a chat
+  useEffect(() => {
+    if (wasAuthenticated && !isAuthenticated && activeChatId) {
+      // User was authenticated, now they're not, and they were in a chat - reload the page
+      window.location.reload();
+    }
+    setWasAuthenticated(isAuthenticated);
+  }, [isAuthenticated, wasAuthenticated, activeChatId]);
 
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden">

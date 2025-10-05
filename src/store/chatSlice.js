@@ -73,12 +73,25 @@ export const deleteChat = createAsyncThunk(
   }
 );
 
+// Helper functions for localStorage
+const saveActiveChatId = (chatId) => {
+  if (chatId) {
+    localStorage.setItem("activeChatId", chatId);
+  } else {
+    localStorage.removeItem("activeChatId");
+  }
+};
+
+const getStoredActiveChatId = () => {
+  return localStorage.getItem("activeChatId");
+};
+
 // Slice
 const chatSlice = createSlice({
   name: "chat",
   initialState: {
-    chats: [], // Ensure this is always an array
-    activeChatId: null,
+    chats: [],
+    activeChatId: null, // Don't load from localStorage here
     messages: [],
     isLoading: false,
     isSending: false,
@@ -87,6 +100,7 @@ const chatSlice = createSlice({
   reducers: {
     setActiveChat: (state, action) => {
       state.activeChatId = action.payload;
+      saveActiveChatId(action.payload);
     },
     setMessages: (state, action) => {
       state.messages = action.payload || [];
@@ -133,6 +147,17 @@ const chatSlice = createSlice({
         state.messages = [];
       }
     },
+    clearActiveChat: (state) => {
+      state.activeChatId = null;
+      state.messages = [];
+      localStorage.removeItem("activeChatId");
+    },
+    initializeActiveChatFromStorage: (state) => {
+      const storedChatId = getStoredActiveChatId();
+      if (storedChatId) {
+        state.activeChatId = storedChatId;
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -160,6 +185,7 @@ const chatSlice = createSlice({
           state.chats.unshift(action.payload);
           state.activeChatId = action.payload.id;
           state.messages = [];
+          saveActiveChatId(action.payload.id);
         }
       })
       .addCase(createNewChat.rejected, (state, action) => {
@@ -195,6 +221,7 @@ const chatSlice = createSlice({
         if (state.activeChatId === chatId) {
           state.activeChatId = null;
           state.messages = [];
+          localStorage.removeItem("activeChatId");
         }
         state.error = null;
       })
@@ -214,7 +241,8 @@ export const {
   setSendingStarted,
   setSendingFinished,
   addMessage,
-  removeChatFromState,
+  clearActiveChat,
+  initializeActiveChatFromStorage,
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

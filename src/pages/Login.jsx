@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { setUser } from "../store/authSlice";
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -9,6 +11,7 @@ const Login = () => {
   });
   const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -34,7 +37,8 @@ const Login = () => {
         }
       )
       .then((response) => {
-        console.log("Login successful:", response.data);
+        // Set user data in Redux
+        dispatch(setUser(response.data.user));
         navigate("/");
       })
       .catch((error) => {
@@ -43,8 +47,6 @@ const Login = () => {
       .finally(() => {
         setSubmitting(false);
       });
-
-    console.log("Login form submitted:", formData);
   };
 
   return (
