@@ -48,16 +48,11 @@ const Home = () => {
 
   useEffect(() => {
     const initializeApp = async () => {
-      // Skip session validation on initial load to avoid 401 errors
-      // Only validate if we suspect there might be an active session
-      const hasStoredChat = localStorage.getItem("activeChatId");
-
-      if (hasStoredChat) {
-        try {
-          await dispatch(validateSession());
-        } catch (error) {
-          // Silently handle validation failure
-        }
+      try {
+        // Always validate session on page load to maintain authentication
+        await dispatch(validateSession());
+      } catch (error) {
+        // Silently handle validation failure
       }
 
       // Initialize active chat from storage
@@ -501,5 +496,7 @@ const Home = () => {
     </div>
   );
 };
+
+
 
 export default Home;

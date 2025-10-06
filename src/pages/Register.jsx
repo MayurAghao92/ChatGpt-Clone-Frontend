@@ -43,10 +43,9 @@ const Register = () => {
         }
       )
       .then((response) => {
-        console.log("Registration successful:", response.data);
-        // Set user data in Redux
-        dispatch(setUser(response.data.user));
-        navigate("/");
+       // i want a popup that says registration successful
+        alert("Registration successful! Please log in.");
+        navigate("/login");
       })
       .catch((error) => {
         console.error("Registration error:", error);
@@ -54,7 +53,6 @@ const Register = () => {
       .finally(() => {
         setSubmitting(false);
       });
-    console.log("Register form submitted:", formData);
   };
 
   return (
