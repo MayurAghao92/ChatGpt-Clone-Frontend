@@ -140,7 +140,6 @@ const Home = () => {
     setSocket(newSocket);
 
     newSocket.on("connect", () => {
-      console.log("Connected to server:", newSocket.id);
     });
 
     newSocket.on("connect_error", (error) => {
