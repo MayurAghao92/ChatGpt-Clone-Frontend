@@ -134,8 +134,7 @@ const Home = () => {
 
     setSocket(newSocket);
 
-    newSocket.on("connect", () => {
-    });
+    newSocket.on("connect", () => {});
 
     newSocket.on("connect_error", (error) => {
       console.error("Connection error:", error);
@@ -143,7 +142,6 @@ const Home = () => {
 
     // Listen for AI responses
     newSocket.on("ai-response", (data) => {
-      console.log("Received AI response:", data);
       if (data.chat === activeChatId) {
         dispatch(addAiMessage({ message: data.content }));
         dispatch(setSendingFinished());
@@ -274,7 +272,6 @@ const Home = () => {
   // Handle window resize to manage sidebar state
   useEffect(() => {
     const handleResize = () => {
-      // Only close sidebar on mobile, don't auto-open on desktop
       if (window.innerWidth < 1024) {
         setSidebarOpen(false);
       }
@@ -496,7 +493,5 @@ const Home = () => {
     </div>
   );
 };
-
-
 
 export default Home;
