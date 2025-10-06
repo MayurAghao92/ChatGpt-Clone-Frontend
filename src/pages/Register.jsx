@@ -29,7 +29,7 @@ const Register = () => {
 
     axios
       .post(
-        "http://localhost:5000/api/auth/register",
+        "https://lexaai-backend-eqt2.onrender.com/api/auth/register",
         {
           email: formData.email,
           fullname: {
@@ -43,7 +43,7 @@ const Register = () => {
         }
       )
       .then((response) => {
-       // i want a popup that says registration successful
+        // i want a popup that says registration successful
         alert("Registration successful! Please log in.");
         navigate("/login");
       })

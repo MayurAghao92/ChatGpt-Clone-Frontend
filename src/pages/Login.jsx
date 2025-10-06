@@ -27,7 +27,7 @@ const Login = () => {
 
     axios
       .post(
-        "http://localhost:5000/api/auth/login",
+        "https://lexaai-backend-eqt2.onrender.com/api/auth/login",
         {
           email: formData.email,
           password: formData.password,

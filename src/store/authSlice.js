@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { authAxios } from "../utils/axiosConfig";
 
-const API_BASE_URL = "http://localhost:5000/api";
+const API_BASE_URL = "https://lexaai-backend-eqt2.onrender.com/api";
 
 // Check session validity on app load
 export const validateSession = createAsyncThunk(

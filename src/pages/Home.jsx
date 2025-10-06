@@ -100,7 +100,7 @@ const Home = () => {
     async (chatId) => {
       try {
         const response = await axios.get(
-          `http://localhost:5000/api/chat/messages/${chatId}`,
+          `https://lexaai-backend-eqt2.onrender.com/api/chat/messages/${chatId}`,
           {
             withCredentials: true,
           }
@@ -124,7 +124,7 @@ const Home = () => {
   useEffect(() => {
     if (!activeChatId) return;
 
-    const newSocket = io("http://localhost:5000", {
+    const newSocket = io("https://lexaai-backend-eqt2.onrender.com", {
       withCredentials: true,
       transports: ["polling", "websocket"],
       forceNew: true,
@@ -239,7 +239,7 @@ const Home = () => {
       dispatch(setMessages([])); // Clear existing messages first
       try {
         const response = await axios.get(
-          `http://localhost:5000/api/chat/messages/${chatId}`,
+          `https://lexaai-backend-eqt2.onrender.com/api/chat/messages/${chatId}`,
           {
             withCredentials: true,
           }
