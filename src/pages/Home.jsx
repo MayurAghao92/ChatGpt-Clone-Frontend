@@ -22,6 +22,8 @@ import ChatHeader from "../components/ChatHeader";
 import MessageList from "../components/MessageList";
 import MessageInput from "../components/MessageInput";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
 const Home = () => {
   // Redux state
   const dispatch = useDispatch();
@@ -100,7 +102,7 @@ const Home = () => {
     async (chatId) => {
       try {
         const response = await axios.get(
-          `https://lexaai-backend-eqt2.onrender.com/api/chat/messages/${chatId}`,
+          `${API_BASE_URL}/api/chat/messages/${chatId}`,
           {
             withCredentials: true,
           }
@@ -124,7 +126,7 @@ const Home = () => {
   useEffect(() => {
     if (!activeChatId) return;
 
-    const newSocket = io("https://lexaai-backend-eqt2.onrender.com", {
+    const newSocket = io(API_BASE_URL, {
       withCredentials: true,
       transports: ["polling", "websocket"],
       forceNew: true,
@@ -239,7 +241,7 @@ const Home = () => {
       dispatch(setMessages([])); // Clear existing messages first
       try {
         const response = await axios.get(
-          `https://lexaai-backend-eqt2.onrender.com/api/chat/messages/${chatId}`,
+          `${API_BASE_URL}/api/chat/messages/${chatId}`,
           {
             withCredentials: true,
           }

@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { setUser } from "../store/authSlice";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
 const Login = () => {
   const [formData, setFormData] = useState({
     email: "",
@@ -27,7 +29,7 @@ const Login = () => {
 
     axios
       .post(
-        "https://lexaai-backend-eqt2.onrender.com/api/auth/login",
+        `${API_BASE_URL}/api/auth/login`,
         {
           email: formData.email,
           password: formData.password,

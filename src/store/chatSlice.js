@@ -1,24 +1,24 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_BASE_URL = "https://lexaai-backend-eqt2.onrender.com/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 // Thunks
 export const fetchChats = createAsyncThunk(
   "chat/fetchChats",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/chat`, {
+      const response = await axios.get(`${API_BASE_URL}/api/chat`, {
         withCredentials: true,
       });
       // Extract the chats array from the response
       return response.data.chats || [];
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Failed to fetch chats"
+        error.response?.data?.message || "Failed to fetch chats",
       );
     }
-  }
+  },
 );
 
 export const createNewChat = createAsyncThunk(
@@ -26,17 +26,17 @@ export const createNewChat = createAsyncThunk(
   async (title, { rejectWithValue }) => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/chat`,
+        `${API_BASE_URL}/api/chat`,
         { title },
-        { withCredentials: true }
+        { withCredentials: true },
       );
       return response.data.chat;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Failed to create chat"
+        error.response?.data?.message || "Failed to create chat",
       );
     }
-  }
+  },
 );
 
 export const sendMessage = createAsyncThunk(
@@ -44,33 +44,33 @@ export const sendMessage = createAsyncThunk(
   async ({ chatId, message }, { rejectWithValue }) => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/chat/${chatId}/message`,
+        `${API_BASE_URL}/api/chat/${chatId}/message`,
         { message },
-        { withCredentials: true }
+        { withCredentials: true },
       );
       return response.data;
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Failed to send message"
+        error.response?.data?.message || "Failed to send message",
       );
     }
-  }
+  },
 );
 
 export const deleteChat = createAsyncThunk(
   "chat/deleteChat",
   async (chatId, { rejectWithValue }) => {
     try {
-      const response = await axios.delete(`${API_BASE_URL}/chat/${chatId}`, {
+      const response = await axios.delete(`${API_BASE_URL}/api/chat/${chatId}`, {
         withCredentials: true,
       });
       return { chatId, message: response.data.message };
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || "Failed to delete chat"
+        error.response?.data?.message || "Failed to delete chat",
       );
     }
-  }
+  },
 );
 
 // Helper functions for localStorage

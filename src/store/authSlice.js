@@ -2,14 +2,14 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { authAxios } from "../utils/axiosConfig";
 
-const API_BASE_URL = "https://lexaai-backend-eqt2.onrender.com/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 // Check session validity on app load
 export const validateSession = createAsyncThunk(
   "auth/validateSession",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await authAxios.get(`${API_BASE_URL}/auth/validate`, {
+      const response = await authAxios.get(`${API_BASE_URL}/api/auth/validate`, {
         withCredentials: true,
       });
       return response.data.user;
@@ -25,7 +25,7 @@ export const logoutUser = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       await axios.post(
-        `${API_BASE_URL}/auth/logout`,
+        `${API_BASE_URL}/api/auth/logout`,
         {},
         {
           withCredentials: true,
